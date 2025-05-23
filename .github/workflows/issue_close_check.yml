@@ -1,0 +1,38 @@
+name: Require Comment on PR Close
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  check-close-comment:
+    if: github.event.pull_request.merged == false
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check for closing comment
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const closedBy = pr.closed_by?.login; // クローズした人のユーザー名
+            
+            const { data: prComments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: pr.number
+            });
+            
+            const prCloseTime = new Date(pr.closed_at);
+            const recentComments = prComments.filter(comment => {
+              const commentTime = new Date(comment.created_at);
+              return (prCloseTime - commentTime) < 300000; // 5分以内
+            });
+            
+            if (recentComments.length === 0) {
+              const mentionText = closedBy ? `@${closedBy}` : '';
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr.number,
+                body: `⚠️ ${mentionText} プルリクエストをクローズする際は、理由をコメントで説明してください。`
+              });
+            }
