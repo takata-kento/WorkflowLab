@@ -17,20 +17,27 @@ jobs:
         with:
           script: |
             const pr = context.payload.pull_request;
-            const closedBy = pr.closed_by?.login; // クローズした人のユーザー名
-            
+
+            const { data: targetPrIssue } = await github.rest.issues.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: pr.number
+            });
+
+            const closedBy = targetPrIssue.closed_by?.login;
+
             const { data: prComments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: pr.number
             });
-            
+
             const prCloseTime = new Date(pr.closed_at);
             const recentComments = prComments.filter(comment => {
               const commentTime = new Date(comment.created_at);
               return (prCloseTime - commentTime) < 300000; // 5分以内
             });
-            
+
             if (recentComments.length === 0) {
               const mentionText = closedBy ? `@${closedBy}` : '';
               await github.rest.issues.createComment({
